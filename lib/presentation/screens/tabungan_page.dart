@@ -5,7 +5,7 @@ import '../../data/models/jenis_transaksi_model.dart';
 import '../../data/services/tabungan_service.dart';
 import 'form_transaksi_bottom_sheet.dart';
 
-/// Halaman tabungan anggota — saldo + riwayat transaksi
+/// Halaman tabungan anggota — menampilkan saldo + riwayat transaksi.
 /// Menggunakan parallel request: GET /api/saldo/{id} + GET /api/tabungan/{id}
 class TabunganPage extends StatefulWidget {
   final int anggotaId;
@@ -22,21 +22,34 @@ class TabunganPage extends StatefulWidget {
 }
 
 class _TabunganPageState extends State<TabunganPage> {
+  // ─── SERVICES & FORMATTERS ───
+  // Service untuk memanggil API tabungan (saldo, list transaksi, tambah transaksi)
   final _tabunganService = TabunganService();
+  
+  // Format mata uang Rupiah Indonesia (contoh: Rp 1.500.000)
   final _currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+  // ─── STATE VARIABLES ───
+  // Menyimpan saldo aktif anggota
   double _saldo = 0.0;
+  // Menyimpan riwayat transaksi tabungan anggota
   List<TabunganModel> _riwayat = [];
+  // Menyimpan jenis-jenis transaksi (seperti Simpanan, Penarikan, Bunga, dll)
   List<JenisTransaksiModel> _jenisTransaksi = [];
+  // Loading status halaman
   bool _isLoading = true;
+  // Menyimpan pesan error jika request gagal
   String? _errorMsg;
 
   @override
   void initState() {
     super.initState();
+    // Memulai request API paralel saat halaman dimuat
     _loadData();
   }
 
+  // ─── REQUEST PARALEL KE SERVER ───
+  // Mempercepat loading dengan menjalankan request Saldo dan Riwayat sekaligus secara paralel
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -44,12 +57,13 @@ class _TabunganPageState extends State<TabunganPage> {
     });
 
     try {
-      // Load tabungan detail dan jenis transaksi secara paralel
+      // Future.wait menjalankan list request ini bersamaan di background
       final results = await Future.wait([
         _tabunganService.getDetailTabungan(widget.anggotaId),
         _tabunganService.getJenisTransaksi(),
       ]);
 
+      // Mengambil hasil response
       final detail = results[0] as Map<String, dynamic>;
       final jenisList = results[1] as List<JenisTransaksiModel>;
 
@@ -71,29 +85,33 @@ class _TabunganPageState extends State<TabunganPage> {
     }
   }
 
-  /// Cari nama jenis transaksi berdasarkan trx_id
+  // ─── UTILITY FUNCTIONS ───
+  
+  /// Cari nama jenis transaksi berdasarkan trxId (id di database)
   String _getJenisNama(int trxId) {
     final jenis = _jenisTransaksi.where((j) => j.id == trxId);
     return jenis.isNotEmpty ? jenis.first.namaTrx : 'Transaksi #$trxId';
   }
 
-  /// Cek apakah transaksi ini menambah atau mengurangi saldo
+  /// Cek apakah transaksi ini menambah saldo (multiplier = 1) atau mengurangi (multiplier = -1)
   int _getMultiplier(int trxId) {
     final jenis = _jenisTransaksi.where((j) => j.id == trxId);
     return jenis.isNotEmpty ? jenis.first.multiplier : 1;
   }
 
+  // ─── BOTTOM SHEET INPUT TRANSAKSI ───
+  // Menampilkan modal dialog bottom sheet dari bawah layar untuk menambah transaksi baru
   void _showTambahTransaksi() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
+      isScrollControlled: true, // Membuat bottom sheet bisa naik ke atas ketika keyboard HP terbuka
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => FormTransaksiBottomSheet(
         anggotaId: widget.anggotaId,
         jenisTransaksi: _jenisTransaksi,
-        onSuccess: _loadData, // Refresh setelah transaksi berhasil
+        onSuccess: _loadData, // Callback untuk memicu refresh data halaman ini setelah transaksi sukses
       ),
     );
   }
@@ -103,14 +121,18 @@ class _TabunganPageState extends State<TabunganPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Tabungan - ${widget.anggotaNama}', style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.deepPurple, // UBAH WARNA APPBAR DI SINI
         iconTheme: const IconThemeData(color: Colors.white),
       ),
+      
+      // Floating Action Button (FAB) di kanan bawah untuk tambah transaksi
       floatingActionButton: FloatingActionButton(
         onPressed: _isLoading ? null : _showTambahTransaksi,
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.deepPurple, // UBAH WARNA FAB DI SINI
         child: const Icon(Icons.add, color: Colors.white),
       ),
+      
+      // ─── KONDISIONAL BODY ───
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMsg != null
@@ -129,13 +151,14 @@ class _TabunganPageState extends State<TabunganPage> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      // ─── Card Saldo ───
+                      // ─── CONTAINER CARD SALDO ANGGOTA ───
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
+                          // Efek gradasi warna background ungu di kartu saldo
                           gradient: const LinearGradient(
-                            colors: [Colors.deepPurple, Colors.purpleAccent],
+                            colors: [Colors.deepPurple, Colors.purpleAccent], // UBAH WARNA GRADIENT DI SINI
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -170,7 +193,7 @@ class _TabunganPageState extends State<TabunganPage> {
 
                       const SizedBox(height: 24),
 
-                      // ─── Riwayat Transaksi ───
+                      // ─── RIWAYAT TRANSAKSI LIST HEADER ───
                       const Text(
                         'Riwayat Transaksi',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -185,14 +208,18 @@ class _TabunganPageState extends State<TabunganPage> {
                           ),
                         )
                       else
+                        // Looping riwayat transaksi dan menampilkannya sebagai widget Card
                         ..._riwayat.map((trx) {
                           final multiplier = _getMultiplier(trx.trxId);
+                          // Jika multiplier >= 0 berarti transaksi kredit/menambah saldo (tampilkan warna hijau)
+                          // Jika multiplier < 0 berarti transaksi debet/mengurangi saldo (tampilkan warna merah)
                           final isCredit = multiplier >= 0;
 
                           return Card(
                             elevation: 1,
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
+                              // Ikon indikator arah panah (masuk / keluar)
                               leading: CircleAvatar(
                                 backgroundColor: isCredit ? Colors.green.shade50 : Colors.red.shade50,
                                 child: Icon(
@@ -205,6 +232,8 @@ class _TabunganPageState extends State<TabunganPage> {
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               subtitle: Text(trx.tanggal),
+                              
+                              // Menampilkan nominal bertanda plus (+) atau minus (-) dengan warna yang sesuai
                               trailing: Text(
                                 '${isCredit ? '+' : '-'} ${_currencyFormat.format(trx.nominal)}',
                                 style: TextStyle(
